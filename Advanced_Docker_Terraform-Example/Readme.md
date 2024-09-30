@@ -168,81 +168,81 @@ Terraform Configuration (main.tf):
 /*#######################################*/
 
 # Required providers
-terraform {
-  required_providers {
-    docker = {
-      source  = "kreuzwerker/docker"
-      version = "~> 3.0"
+    terraform {
+    required_providers {
+        docker = {
+        source  = "kreuzwerker/docker"
+        version = "~> 3.0"
+        }
     }
-  }
-}
+    }
 
 # Initialize Docker provider
-provider "docker" {}
+        provider "docker" {}
 
 # Docker Swarm init (optional if already set up)
-resource "docker_swarm" "swarm" {
-  advertise_addr = "eth0"
-}
+        resource "docker_swarm" "swarm" {
+        advertise_addr = "eth0"
+        }
 
 # Create an overlay network for swarm services
-resource "docker_network" "swarm_network" {
-  name     = "swarm_network"
-  driver   = "overlay"
-  attachable = true
-}
+        resource "docker_network" "swarm_network" {
+        name     = "swarm_network"
+        driver   = "overlay"
+        attachable = true
+        }
 
 # Define the Docker image for the Nginx service
-resource "docker_image" "nginx" {
-  name         = "nginx:latest"
-  keep_locally = false
-}
+        resource "docker_image" "nginx" {
+        name         = "nginx:latest"
+        keep_locally = false
+        }
 
 # Create a scalable Nginx service in Docker Swarm
-resource "docker_service" "nginx_service" {
-  name = "nginx-service"
+        resource "docker_service" "nginx_service" {
+        name = "nginx-service"
 
   # Reference the Nginx Docker image
-  task_spec {
-    container_spec {
-      image = docker_image.nginx.name
-    }
+    task_spec {
+        container_spec {
+        image = docker_image.nginx.name
+        }
 
-    # Define resource limits (optional, but good for production environments)
-    resources {
-      limits {
-        memory = "256m"
-      }
-      reservations {
-        memory = "128m"
-      }
+        # Define resource limits (optional, but good for production environments)
+        resources {
+        limits {
+            memory = "256m"
+        }
+        reservations {
+            memory = "128m"
+        }
+        }
     }
-  }
 
   # Set the number of replicas for scaling
-  mode {
-    replicated {
-      replicas = 3
-    }
-  }
+        mode {
+            replicated {
+            replicas = 3
+            }
+        }
 
   # Attach the service to the custom overlay network
-  endpoint_spec {
-    ports {
-      target_port    = 80   # Inside the container
-      published_port = 8080 # Exposed port on the host
-      protocol       = "tcp"
-    }
-  }
+        endpoint_spec {
+            ports {
+            target_port    = 80   # Inside the container
+            published_port = 8080 # Exposed port on the host
+            protocol       = "tcp"
+            }
+        }
 
-  networks = [docker_network.swarm_network.name]
-}
+        networks = [docker_network.swarm_network.name]
+        }
 
 # Load balancer using HAProxy (can also use Nginx)
-resource "docker_image" "haproxy" {
-  name         = "haproxy:latest"
-  keep_locally = false
-}
+        resource "docker_image" "haproxy" {
+        name         = "haproxy:latest"
+        keep_locally = false
+        }
 
 # HAProxy container to distribute load across Nginx replicas
         resource "docker_container" "haproxy_lb" {
