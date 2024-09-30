@@ -245,20 +245,20 @@ resource "docker_image" "haproxy" {
 }
 
 # HAProxy container to distribute load across Nginx replicas
-resource "docker_container" "haproxy_lb" {
-  name  = "haproxy-lb"
-  image = docker_image.haproxy.latest
+        resource "docker_container" "haproxy_lb" {
+        name  = "haproxy-lb"
+        image = docker_image.haproxy.latest
 
-  ports {
-    internal = 80
-    external = 80
-  }
+        ports {
+            internal = 80
+            external = 80
+        }
 
-  networks_advanced {
-    name = docker_network.swarm_network.name
-  }
+        networks_advanced {
+            name = docker_network.swarm_network.name
+        }
 
-/*Simple HAProxy config (can be enhanced)*/
+# Simple HAProxy config (can be enhanced)
   provisioner "local-exec" {
     command = <<EOT
       echo "
