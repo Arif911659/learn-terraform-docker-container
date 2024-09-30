@@ -9,84 +9,84 @@ Advanced Docker Terraform Example
 /*#######################################*/
 
 # Specify the required provider version
-terraform {
-  required_providers {
-    docker = {
-      source  = "kreuzwerker/docker"
-      version = "~> 3.0"
-    }
-  }
-}
+        terraform {
+        required_providers {
+            docker = {
+            source  = "kreuzwerker/docker"
+            version = "~> 3.0"
+            }
+        }
+        }
 
 # Initialize the Docker provider
-provider "docker" {}
+        provider "docker" {}
 
 # Create a custom Docker network
-resource "docker_network" "my_network" {
-  name = "my_custom_network"
-}
+        resource "docker_network" "my_network" {
+        name = "my_custom_network"
+        }
 
 # Create a Docker volume for persistent storage
-resource "docker_volume" "mysql_data" {
-  name = "mysql_data_volume"
-}
+        resource "docker_volume" "mysql_data" {
+        name = "mysql_data_volume"
+        }
 
 # Define a Docker image for Nginx (from Docker Hub)
-resource "docker_image" "nginx" {
-  name         = "nginx:latest"
-  keep_locally = false
-}
+        resource "docker_image" "nginx" {
+        name         = "nginx:latest"
+        keep_locally = false
+        }
 
 # Define a Docker image for MySQL (from Docker Hub)
-resource "docker_image" "mysql" {
-  name         = "mysql:5.7"
-  keep_locally = false
-}
+        resource "docker_image" "mysql" {
+        name         = "mysql:5.7"
+        keep_locally = false
+        }
 
 # Create a MySQL container
-resource "docker_container" "mysql" {
-  name  = "mysql-server"
-  image = docker_image.mysql.latest
+        resource "docker_container" "mysql" {
+        name  = "mysql-server"
+        image = docker_image.mysql.latest
 
   # Attach container to custom network
-  networks_advanced {
-    name = docker_network.my_network.name
-  }
+        networks_advanced {
+            name = docker_network.my_network.name
+        }
 
   # Mount the Docker volume for persistent data storage
-  volumes {
-    volume_name    = docker_volume.mysql_data.name
-    container_path = "/var/lib/mysql"
-  }
+        volumes {
+            volume_name    = docker_volume.mysql_data.name
+            container_path = "/var/lib/mysql"
+        }
 
   # Set environment variables for MySQL configuration
-  env = [
-    "MYSQL_ROOT_PASSWORD=rootpassword",
-    "MYSQL_DATABASE=mydatabase",
-    "MYSQL_USER=myuser",
-    "MYSQL_PASSWORD=mypassword"
-  ]
-}
+        env = [
+            "MYSQL_ROOT_PASSWORD=rootpassword",
+            "MYSQL_DATABASE=mydatabase",
+            "MYSQL_USER=myuser",
+            "MYSQL_PASSWORD=mypassword"
+        ]
+        }
 
 # Create an Nginx container
-resource "docker_container" "nginx" {
-  name  = "nginx-server"
-  image = docker_image.nginx.latest
+        resource "docker_container" "nginx" {
+        name  = "nginx-server"
+        image = docker_image.nginx.latest
 
   # Attach container to custom network
-  networks_advanced {
-    name = docker_network.my_network.name
-  }
+        networks_advanced {
+            name = docker_network.my_network.name
+        }
 
   # Map port 80 in the container to port 8080 on the host machine
-  ports {
-    internal = 80
-    external = 8080
-  }
+        ports {
+            internal = 80
+            external = 8080
+        }
 
-  # Link the Nginx container to the MySQL container (for inter-container communication)
-  links = [docker_container.mysql.name]
-}
+        # Link the Nginx container to the MySQL container (for inter-container communication)
+        links = [docker_container.mysql.name]
+        }
 
 
 /*#######################################*/
@@ -114,13 +114,13 @@ resource "docker_container" "nginx" {
 3. Running the Configuration:
 
 # Initialize the Terraform configuration
-terraform init
+    terraform init
 
 # Plan the resources to be created
-terraform plan
+    terraform plan
 
 # Apply the configuration
-terraform apply
+    terraform apply
 
 
 # After applying, you'll have:
