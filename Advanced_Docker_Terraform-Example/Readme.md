@@ -322,11 +322,11 @@ Explanation of the Advanced Setup:
 The number of replicas can be easily adjusted by changing the replicas value in the docker_service resource:
 
 
-mode {
-  replicated {
-    replicas = 5 # Adjust the number of replicas here
-  }
-}
+        mode {
+            replicated {
+            replicas = 5 # Adjust the number of replicas here
+                        }
+                }
 
 After updating the Terraform configuration, simply run:
 
