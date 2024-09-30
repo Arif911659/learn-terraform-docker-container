@@ -258,7 +258,7 @@ resource "docker_container" "haproxy_lb" {
     name = docker_network.swarm_network.name
   }
 
-  # Simple HAProxy config (can be enhanced)
+/*Simple HAProxy config (can be enhanced)*/
   provisioner "local-exec" {
     command = <<EOT
       echo "
@@ -295,8 +295,8 @@ resource "docker_container" "haproxy_lb" {
           server nginx1 nginx-service:80 maxconn 32
       " > /usr/local/etc/haproxy/haproxy.cfg
     EOT
-  }
-}
+                }
+        }
 
 
 /*#######################################*/
