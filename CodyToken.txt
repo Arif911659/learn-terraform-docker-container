@@ -1,1 +1,6 @@
 sgp_fd1b4edb60bf82b8_0083d742d10185b1367c542b85223a25d6cc34d8
+
+
+
+
+/home/k8s-master/learn-terraform-docker-container/lab56-Understanding-Terraform-States/pet.txt

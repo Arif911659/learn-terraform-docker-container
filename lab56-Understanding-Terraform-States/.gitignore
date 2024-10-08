@@ -1,0 +1,12 @@
+# Local .terraform directories
+**/.terraform/*
+
+# Ignore override files as they are usually used to override resources locally
+*.tfoverride
+*.tfplan
+
+# Ignore CLI configuration files
+.terraformrc
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.*

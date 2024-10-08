@@ -1,0 +1,1 @@
+filename = "/home/k8s-master/learn-terraform-docker-container/lab56-Understanding-Terraform-States/mypet.txt"
