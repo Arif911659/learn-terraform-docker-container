@@ -1,0 +1,53 @@
+Advanced_Docker_Terraform-Example
+
+
+
+
+# Add this to your existing Terraform configuration
+
+# Null resource to clean up the Nginx service before destroying other resources
+resource "null_resource" "cleanup_nginx_service" {
+  triggers = {
+    nginx_service_name = "nginx-service"
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = "docker service rm ${self.triggers.nginx_service_name} || true"
+  }
+}
+
+# Null resource to clean up the HAProxy container before destroying other resources
+resource "null_resource" "cleanup_haproxy" {
+  triggers = {
+    haproxy_container_name = docker_container.haproxy_lb.name
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = "docker stop ${self.triggers.haproxy_container_name} && docker rm ${self.triggers.haproxy_container_name} || true"
+  }
+}
+
+
+
+# Modify your existing resources to depend on these cleanup resources
+
+resource "docker_network" "swarm_network" {
+  # ... existing configuration ...
+  depends_on = [null_resource.cleanup_nginx_service, null_resource.cleanup_haproxy]
+}
+
+resource "docker_image" "nginx" {
+  # ... existing configuration ...
+  depends_on = [null_resource.cleanup_nginx_service]
+}
+
+# Modify your HAProxy container resource
+resource "docker_container" "haproxy_lb" {
+  # ... existing configuration ...
+  depends_on = [null_resource.cleanup_nginx_service]
+
+  # Add this to ensure the container is removed when the resource is destroyed
+  rm = true
+}
