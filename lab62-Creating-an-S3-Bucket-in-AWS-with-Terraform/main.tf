@@ -10,6 +10,15 @@ resource "aws_s3_bucket" "my_bucket" {
     tags = {
         Name = "MyBucket"
         Environment = "Dev"
+        Owner = "Poridhi"
+        Project = "Terraform"
+        CostCenter = "123456"
+        Department = "IT"
+        CreatedBy = "Terraform"
+        CreatedOn = "2023-07-01"
+        LastModifiedBy = "Terraform"
+        LastModifiedOn = "2023-07-02"
+        Description = "This is my Terraform bucket"
     }  
 }
 resource "aws_s3_bucket_acl" "my_bucket_acl" {
