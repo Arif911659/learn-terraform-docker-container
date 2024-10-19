@@ -1,0 +1,443 @@
+LAB-Exam-(Module 05 & 06)
+
+
+Create k3s cluster in private subnet and nginx load balancer in public subnet using terraform blueprint approach.
+
+To set up a k3s cluster in a private subnet and an Nginx load balancer in a public subnet using the Terraform blueprint approach, you'll need to create resources in the following manner:
+VPC Configuration: Create a VPC with public and private subnets.
+Security Groups: Create appropriate security groups for the k3s cluster and the Nginx load balancer.
+EC2 Instances: Launch EC2 instances in the private subnet for the k3s cluster (master and worker nodes) and an EC2 instance in the public subnet for the Nginx load balancer.
+k3s Setup: Configure the k3s cluster on the private subnet EC2 instances.
+Nginx Load Balancer: Set up Nginx on the public EC2 instance to forward traffic to the k3s cluster.
+Here is a Terraform blueprint approach:
+Step 1: Define the Provider
+hcl
+Copy code
+provider "aws" {
+  region = "us-west-2"
+}
+
+Step 2: Create VPC, Subnets, and Security Groups
+hcl
+Copy code
+resource "aws_vpc" "main" {
+  cidr_block = "10.0.0.0/16"
+}
+
+resource "aws_subnet" "public" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.1.0/24"
+  map_public_ip_on_launch = true
+}
+
+resource "aws_subnet" "private" {
+  vpc_id     = aws_vpc.main.id
+  cidr_block = "10.0.2.0/24"
+}
+
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id
+}
+
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.main.id
+}
+
+resource "aws_route" "internet_access" {
+  route_table_id         = aws_route_table.public_rt.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.gw.id
+}
+
+resource "aws_route_table_association" "public_assoc" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+resource "aws_security_group" "nginx_lb_sg" {
+  name        = "nginx_lb_sg"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "k3s_cluster_sg" {
+  name        = "k3s_cluster_sg"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 6443
+    to_port     = 6443
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+Step 3: Create EC2 Instances for k3s Cluster (Master and Worker Nodes)
+hcl
+Copy code
+resource "aws_instance" "k3s_master" {
+  ami           = "ami-0c55b159cbfafe1f0" # Replace with Ubuntu AMI
+  instance_type = "t3.medium"
+  subnet_id     = aws_subnet.private.id
+  security_groups = [aws_security_group.k3s_cluster_sg.id]
+
+  tags = {
+    Name = "k3s-master"
+  }
+
+  user_data = <<-EOF
+    #!/bin/bash
+    curl -sfL https://get.k3s.io | sh -s - server --node-ip=10.0.2.10
+  EOF
+}
+
+resource "aws_instance" "k3s_worker" {
+  count         = 2
+  ami           = "ami-0c55b159cbfafe1f0" # Replace with Ubuntu AMI
+  instance_type = "t3.medium"
+  subnet_id     = aws_subnet.private.id
+  security_groups = [aws_security_group.k3s_cluster_sg.id]
+
+  tags = {
+    Name = "k3s-worker-${count.index + 1}"
+  }
+
+  user_data = <<-EOF
+    #!/bin/bash
+    curl -sfL https://get.k3s.io | K3S_URL=https://10.0.2.10:6443 K3S_TOKEN=<your_token> sh -
+  EOF
+}
+
+Step 4: Create EC2 Instance for Nginx Load Balancer in Public Subnet
+hcl
+Copy code
+resource "aws_instance" "nginx_lb" {
+  ami           = "ami-0c55b159cbfafe1f0" # Replace with Ubuntu AMI
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.public.id
+  security_groups = [aws_security_group.nginx_lb_sg.id]
+
+  tags = {
+    Name = "nginx-lb"
+  }
+
+  user_data = <<-EOF
+    #!/bin/bash
+    sudo apt update
+    sudo apt install -y nginx
+    sudo tee /etc/nginx/conf.d/default.conf <<EOL
+    upstream k3s_cluster {
+      server 10.0.2.10:80;
+      server 10.0.2.11:80;
+      server 10.0.2.12:80;
+    }
+    server {
+      listen 80;
+      location / {
+        proxy_pass http://k3s_cluster;
+      }
+    }
+    EOL
+    sudo systemctl restart nginx
+  EOF
+}
+
+Step 5: Outputs (Optional)
+hcl
+Copy code
+output "nginx_lb_public_ip" {
+  value = aws_instance.nginx_lb.public_ip
+}
+
+output "k3s_master_private_ip" {
+  value = aws_instance.k3s_master.private_ip
+}
+
+output "k3s_worker_private_ips" {
+  value = aws_instance.k3s_worker.*.private_ip
+}
+
+Explanation:
+VPC: A virtual private cloud with public and private subnets.
+Security Groups: One for the Nginx load balancer, allowing HTTP traffic, and one for the k3s cluster allowing internal communication.
+EC2 Instances: The Nginx load balancer resides in the public subnet, while the k3s master and worker nodes reside in the private subnet.
+User Data: Installs k3s on the private instances and Nginx on the public instance, which forwards traffic to the k3s nodes.
+This blueprint sets up a basic k3s cluster with Nginx as the load balancer. Make sure to replace <your_token> with the actual token generated by the master node during the k3s setup.
+
+
+===================================================================================>>>>>
+
+Explain every step in depth
+ChatGPT said:
+ChatGPT
+Let’s break down each step in the Terraform blueprint, so you understand how every part fits together to create a k3s cluster in a private subnet and an Nginx load balancer in a public subnet.
+
+Step 1: Define the Provider
+hcl
+Copy code
+provider "aws" {
+  region = "us-west-2"
+}
+
+Explanation:
+Provider: This specifies which cloud provider (AWS in this case) Terraform will communicate with to provision resources.
+Region: us-west-2 is the specific region where all AWS resources (VPC, EC2, etc.) will be deployed. You can adjust this to suit your requirements.
+
+Step 2: Create VPC, Subnets, and Security Groups
+1. Create the VPC:
+hcl
+Copy code
+resource "aws_vpc" "main" {
+  cidr_block = "10.0.0.0/16"
+}
+
+VPC: A Virtual Private Cloud is a logically isolated network on AWS where all your resources (EC2, subnets, etc.) will be deployed.
+CIDR Block: The VPC is created with the address range 10.0.0.0/16. This means the VPC can have up to 65,536 IP addresses (2^(32-16)).
+2. Create the Public Subnet:
+hcl
+Copy code
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  map_public_ip_on_launch = true
+}
+
+Subnet: This defines a network segment inside the VPC. The public subnet has a CIDR block of 10.0.1.0/24, allowing for up to 256 IP addresses.
+map_public_ip_on_launch: This ensures that instances launched into this subnet will have public IP addresses assigned, making them accessible from the internet.
+3. Create the Private Subnet:
+hcl
+Copy code
+resource "aws_subnet" "private" {
+  vpc_id     = aws_vpc.main.id
+  cidr_block = "10.0.2.0/24"
+}
+
+Private Subnet: This subnet has a CIDR block of 10.0.2.0/24, which is for the k3s cluster. Instances launched here won't have public IP addresses, keeping them isolated from the internet.
+4. Create the Internet Gateway:
+hcl
+Copy code
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id
+}
+
+Internet Gateway: This allows instances in the public subnet to connect to the internet.
+5. Create the Route Table for the Public Subnet:
+hcl
+Copy code
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.main.id
+}
+
+Route Table: A route table dictates how traffic should be directed within the VPC. This one is associated with the public subnet.
+6. Define a Route for Internet Access:
+hcl
+Copy code
+resource "aws_route" "internet_access" {
+  route_table_id         = aws_route_table.public_rt.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.gw.id
+}
+
+Route: The route directs all traffic (0.0.0.0/0 means all traffic) from the public subnet to the internet through the Internet Gateway.
+7. Associate the Route Table with the Public Subnet:
+hcl
+Copy code
+resource "aws_route_table_association" "public_assoc" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+Route Table Association: This explicitly links the route table to the public subnet, so all traffic in that subnet follows the rules of the route table (internet access).
+8. Create Security Groups:
+Nginx Load Balancer Security Group:
+hcl
+Copy code
+resource "aws_security_group" "nginx_lb_sg" {
+  name        = "nginx_lb_sg"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+Ingress Rule: Allows incoming HTTP traffic (port 80) from anywhere (0.0.0.0/0).
+Egress Rule: Allows outbound traffic to any destination (0.0.0.0/0).
+k3s Cluster Security Group:
+hcl
+Copy code
+resource "aws_security_group" "k3s_cluster_sg" {
+  name        = "k3s_cluster_sg"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 6443
+    to_port     = 6443
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+Ingress Rule (6443): Allows communication between k3s master and worker nodes (k3s API runs on port 6443), limited to the VPC CIDR range (10.0.0.0/16).
+Ingress Rule (22): Allows SSH access from anywhere.
+Egress Rule: Allows outbound traffic to any destination.
+
+Step 3: Create EC2 Instances for k3s Cluster (Master and Worker Nodes)
+1. Master Node:
+hcl
+Copy code
+resource "aws_instance" "k3s_master" {
+  ami           = "ami-0c55b159cbfafe1f0" # Replace with Ubuntu AMI
+  instance_type = "t3.medium"
+  subnet_id     = aws_subnet.private.id
+  security_groups = [aws_security_group.k3s_cluster_sg.id]
+
+  tags = {
+    Name = "k3s-master"
+  }
+
+  user_data = <<-EOF
+    #!/bin/bash
+    curl -sfL https://get.k3s.io | sh -s - server --node-ip=10.0.2.10
+  EOF
+}
+
+AMI: Use an Ubuntu AMI. t3.medium is a moderate-sized instance, suitable for running k3s master.
+Subnet: The master node is placed in the private subnet (aws_subnet.private.id), making it inaccessible directly from the internet.
+Security Group: The master node uses the k3s_cluster_sg security group.
+User Data: This script runs when the instance starts. It installs and configures k3s, specifying the master’s IP address (10.0.2.10).
+2. Worker Nodes:
+hcl
+Copy code
+resource "aws_instance" "k3s_worker" {
+  count         = 2
+  ami           = "ami-0c55b159cbfafe1f0" # Replace with Ubuntu AMI
+  instance_type = "t3.medium"
+  subnet_id     = aws_subnet.private.id
+  security_groups = [aws_security_group.k3s_cluster_sg.id]
+
+  tags = {
+    Name = "k3s-worker-${count.index + 1}"
+  }
+
+  user_data = <<-EOF
+    #!/bin/bash
+    curl -sfL https://get.k3s.io | K3S_URL=https://10.0.2.10:6443 K3S_TOKEN=<your_token> sh -
+  EOF
+}
+
+Worker Nodes: Two worker nodes are created using the count argument. Each worker node is launched in the private subnet with t3.medium instances.
+User Data: The worker nodes connect to the k3s master node using its IP (10.0.2.10:6443) and the token generated by the master (K3S_TOKEN=<your_token>).
+
+Step 4: Create EC2 Instance for Nginx Load Balancer in Public Subnet
+hcl
+Copy code
+resource "aws_instance" "nginx_lb" {
+  ami           = "ami-0c55b159cbfafe1f0" # Replace with Ubuntu AMI
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.public.id
+  security_groups = [aws_security_group.nginx_lb_sg.id]
+
+  tags = {
+    Name = "nginx-lb"
+  }
+
+  user_data = <<-EOF
+    #!/bin/bash
+    sudo apt update
+    sudo apt install -y nginx
+    sudo tee /etc/nginx/conf.d/default.conf <<EOL
+    upstream k3s_cluster {
+      server 10.0.2.10:80;
+      server 10.0.2.11:80;
+      server 10.0.2.12:80;
+    }
+    server {
+      listen 80;
+      location / {
+        proxy_pass http://k3s_cluster;
+      }
+    }
+    EOL
+    sudo systemctl restart nginx
+  EOF
+}
+
+Nginx Load Balancer: A single EC2 instance (t2.micro) is launched in the public subnet to act as the load balancer.
+User Data: Nginx is installed and configured to act as a reverse proxy that distributes traffic between the k3s cluster nodes (10.0.2.10, 10.0.2.11, 10.0.2.12). When traffic comes to the load balancer, it will forward it to one of the k3s nodes.
+
+Step 5: Outputs (Optional)
+hcl
+Copy code
+output "nginx_lb_public_ip" {
+  value = aws_instance.nginx_lb.public_ip
+}
+
+output "k3s_master_private_ip" {
+  value = aws_instance.k3s_master.private_ip
+}
+
+output "k3s_worker_private_ips" {
+  value = aws_instance.k3s_worker.*.private_ip
+}
+
+Outputs: These are useful for getting the public IP of the load balancer and the private IPs of the k3s master and worker nodes.
+
+Summary of Key Concepts:
+VPC and Subnets: The public subnet hosts the load balancer (Nginx), while the private subnet hosts the k3s master and worker nodes.
+Security Groups: Define what traffic is allowed into/out of the Nginx load balancer and the k3s cluster.
+k3s Cluster: A lightweight Kubernetes distribution running in a private subnet.
+Nginx Load Balancer: Balances traffic across k3s worker nodes, and it is the only public-facing component.
+This setup ensures that your k3s cluster remains secure and isolated, while the Nginx load balancer serves as the entry point for external traffic.
+
