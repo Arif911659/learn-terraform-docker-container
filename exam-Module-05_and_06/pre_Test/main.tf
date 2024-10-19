@@ -85,6 +85,7 @@ resource "aws_instance" "k3s_master" {
   ami           = "ami-047126e50991d067b" # Replace with Ubuntu AMI
   instance_type = "t2.micro"
   subnet_id     = aws_subnet.private.id
+  key_name      = aws_key_pair.deployer_key.key_name  # <-- Add this line
   security_groups = [aws_security_group.k3s_cluster_sg.id]
 
   tags = {
@@ -95,14 +96,49 @@ resource "aws_instance" "k3s_master" {
     #!/bin/bash
     curl -sfL https://get.k3s.io | sh -s - server --node-ip=10.0.2.10
   EOF
+  # Use a provisioner to fetch the token after creation
+  provisioner "local-exec" {
+    command = <<EOL
+      echo "Waiting for K3s to install..."
+      sleep 60  # Increased wait time
+      TOKEN=$(ssh -o StrictHostKeyChecking=no -i ${path.module}/aws_key_pair.pem ubuntu@${self.public_ip} "cat /var/lib/rancher/k3s/server/token" 2>/tmp/ssh_error.log)
+      if [ $? -eq 0 ]; then
+        echo $TOKEN > ${path.module}/k3s_token.txt
+        echo "K3s token saved to k3s_token.txt."
+      else
+        echo "Failed to retrieve K3s token. Check /tmp/ssh_error.log for details."
+      fi
+    EOL
+  }
 }
+#   provisioner "remote-exec" {
+#     inline = [
+#       "sudo cat /var/lib/rancher/k3s/server/node-token"
+#     ]
+
+#     connection {
+#       type        = "ssh"
+#       user        = "ubuntu"
+#       private_key = file("${path.module}/aws_key_pair.pem")
+#       host        = aws_instance.k3s_master.private_ip
+#     }
+#   }
+
+#   provisioner "local-exec" {
+#     command = "echo '${aws_instance.k3s_master.private_ip}:6443'"
+#   }  
+# }
+######################
 
 resource "aws_instance" "k3s_worker" {
   count         = 2
   ami           = "ami-047126e50991d067b" # Replace with Ubuntu AMI
   instance_type = "t2.micro"
   subnet_id     = aws_subnet.private.id
+  key_name      = aws_key_pair.deployer_key.key_name  # <-- Add this line
   security_groups = [aws_security_group.k3s_cluster_sg.id]
+# Ensure workers depend on the master node
+  depends_on = [aws_instance.k3s_master]
 
   tags = {
     Name = "k3s-worker-${count.index + 1}"
@@ -118,8 +154,11 @@ resource "aws_instance" "nginx_lb" {
   ami           = "ami-047126e50991d067b" # Replace with Ubuntu AMI
   instance_type = "t2.micro"
   subnet_id     = aws_subnet.public.id
+  key_name      = aws_key_pair.deployer_key.key_name  # <-- Add this line
   security_groups = [aws_security_group.nginx_lb_sg.id]
-
+# Ensure workers depend on the master node
+  depends_on = [aws_instance.k3s_master]
+  
   tags = {
     Name = "nginx-lb"
   }
