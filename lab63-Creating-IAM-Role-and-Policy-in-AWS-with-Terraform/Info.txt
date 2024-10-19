@@ -1,6 +1,3 @@
-AKIASBGQLNPCCCSCCP7N
-xqm3WcXERzcaXxyaRaKwxHVVbpRth80lA22/zd3q
-
 Creating an IAM Role and Policy in AWS with Terraform
 
 Creating an IAM Role and Policy in AWS with Terraform
