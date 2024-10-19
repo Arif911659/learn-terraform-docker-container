@@ -21,10 +21,24 @@ resource "aws_s3_bucket" "my_bucket" {
         Description = "This is my Terraform bucket"
     }  
 }
-resource "aws_s3_bucket_acl" "my_bucket_acl" {
+
+resource "aws_s3_bucket_ownership_controls" "my_bucket" {
   bucket = aws_s3_bucket.my_bucket.id
-  acl    = "private"
+
+  rule {
+    object_ownership = "ObjectWriter"
+  }
 }
+
+# resource "aws_s3_bucket_acl" "my_bucket_acl" {
+#   bucket = aws_s3_bucket.my_bucket.id
+#   acl    = "private"
+# }
+
+# resource "aws_s3_bucket_acl" "my_bucket_acl" {
+#   bucket = aws_s3_bucket.my_bucket.id
+#   acl    = "private"
+# }
 
 resource "aws_s3_bucket_versioning" "my_bucket_versioning" {
     bucket = aws_s3_bucket.my_bucket.id

@@ -169,3 +169,69 @@ Versioning: Check that versioning is enabled for the bucket.
 
 Conclusion
 In this lab, you learned how to create an S3 bucket and enable versioning using Terraform. You defined an S3 bucket with a unique name and private ACL, enabled versioning on the bucket, and added tags for better management. This exercise demonstrates the power of Terraform in managing AWS S3 resources, highlighting best practices for data storage and version control.
+
+###################################################################
+To store S3 bucket information (e.g., bucket name, ARN, and ID) in a text file whenever a bucket is created or updated using Terraform, you can utilize Terraform's local_file resource. This will allow you to write the relevant information to a file after the bucket is created or modified.
+###################################################################
+
+Here’s how you can do it:
+
+1. Modify main.tf to Add the local_file Resource
+Add the local_file resource to store the bucket information in a text file.
+
+hcl
+Copy code
+provider "aws" {
+  region = "us-east-1" # Change to your preferred AWS region
+}
+
+resource "aws_s3_bucket" "example_bucket" {
+  bucket = "my-unique-bucket-name"  # Replace with a unique bucket name
+  acl    = "private"
+
+  tags = {
+    Name        = "My S3 Bucket"
+    Environment = "Dev"
+  }
+}
+
+# Write bucket information to a text file after bucket creation or update
+resource "local_file" "bucket_info" {
+  filename = "${path.module}/bucket_info.txt"  # Text file path
+  content  = <<EOT
+Bucket Name: ${aws_s3_bucket.example_bucket.bucket}
+Bucket ARN: ${aws_s3_bucket.example_bucket.arn}
+Bucket ID: ${aws_s3_bucket.example_bucket.id}
+EOT
+}
+
+output "bucket_id" {
+  value = aws_s3_bucket.example_bucket.id
+}
+
+output "bucket_arn" {
+  value = aws_s3_bucket.example_bucket.arn
+}
+2. Initialize and Apply the Configuration
+Run the following commands to initialize and apply the Terraform configuration:
+
+bash
+Copy code
+terraform init
+terraform apply
+Terraform will:
+
+Create or update the S3 bucket.
+Generate a file bucket_info.txt in your project directory, containing the bucket information.
+3. View the Text File
+After Terraform runs successfully, you will find a file named bucket_info.txt in your project directory with the following content:
+
+ruby
+Copy code
+Bucket Name: my-unique-bucket-name
+Bucket ARN: arn:aws:s3:::my-unique-bucket-name
+Bucket ID: my-unique-bucket-name
+Explanation
+The local_file resource writes the S3 bucket details (name, ARN, and ID) to a text file called bucket_info.txt.
+${path.module} is a built-in Terraform function that references the current module's directory.
+This ensures that the text file is updated whenever the S3 bucket is created or modified by Terraform.
