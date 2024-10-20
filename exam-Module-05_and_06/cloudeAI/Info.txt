@@ -1,0 +1,13 @@
+Outputs:
+
+internet_test_command = "ssh -i ./k3s-key-pair.pem -J ubuntu@18.138.232.249 ubuntu@10.0.2.248 'cat /tmp/internet_test_result.txt'"
+k3s_master_private_ip = "10.0.2.248"
+k3s_token = <sensitive>
+k3s_worker_private_ips = [
+  "10.0.2.30",
+  "10.0.2.242",
+]
+key_pair_file = "./k3s-key-pair.pem"
+load_balanced_url = "http://18.138.232.249"
+nginx_lb_public_ip = "18.138.232.249"
+ssh_command = "ssh -i ./k3s-key-pair.pem -J ubuntu@18.138.232.249 ubuntu@<PRIVATE_IP>"

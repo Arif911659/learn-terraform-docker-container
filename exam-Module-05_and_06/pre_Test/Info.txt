@@ -1,3 +1,13 @@
+Outputs:
+
+k3s_master_private_ip = "10.0.2.130"
+k3s_worker_private_ips = [
+  "10.0.2.212",
+  "10.0.2.73",
+]
+nginx_lb_public_ip = "13.212.123.102"
+
+
 LAB-Exam-(Module 05 & 06)
 
 

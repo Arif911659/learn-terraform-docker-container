@@ -159,7 +159,12 @@ resource "aws_security_group" "nginx" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "icmp"
+    cidr_blocks = ["10.0.2.0/24"]
+  }
   egress {
     from_port   = 0
     to_port     = 0
@@ -178,6 +183,13 @@ resource "aws_security_group" "k3s" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.nginx.id]
+  }
+
+  ingress {
     from_port       = 6443
     to_port         = 6443
     protocol        = "tcp"
@@ -190,7 +202,12 @@ resource "aws_security_group" "k3s" {
     protocol        = "tcp"
     security_groups = [aws_security_group.nginx.id]
   }
-
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "icmp"
+    cidr_blocks = ["10.0.1.0/24"]
+  }
   ingress {
     from_port = 0
     to_port   = 0
@@ -244,14 +261,33 @@ resource "aws_instance" "k3s_master" {
 
   user_data = <<-EOF
               #!/bin/bash
-              apt-get update
-              apt-get install -y curl
+              
+              # Test internet connectivity
+              echo "Testing internet connectivity..."
+              if curl -s --head  --request GET https://www.example.com | grep "200 OK" > /dev/null; then 
+                echo "Internet connectivity test passed" | tee /tmp/internet_test_result.txt
+              else
+                echo "Internet connectivity test failed" | tee /tmp/internet_test_result.txt
+              fi
+              
+              # Install k3s
               curl -sfL https://get.k3s.io | sh -s - server --token=${random_password.k3s_token.result}
+              
+              # Wait for k3s to start
               while ! systemctl is-active --quiet k3s; do
                 sleep 60
                 echo "Waiting for k3s to start..."
               done
-              echo "k3s master node is ready"
+              
+              # Create deployment YAML
+              cat > /home/ubuntu/nginx-deployment.yaml <<EOL
+              ${file("${path.module}/nginx-deployment.yaml")}
+              EOL
+              
+              # Apply the deployment
+              kubectl apply -f /home/ubuntu/nginx-deployment.yaml
+              
+              echo "k3s master node is ready and deployment is applied"
               EOF
 
   tags = {
@@ -313,6 +349,7 @@ resource "aws_instance" "nginx_lb" {
                   proxy_set_header Host \$host;
                   proxy_set_header X-Real-IP \$remote_addr;
                   proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
                 }
               }
               EOL
@@ -335,9 +372,38 @@ resource "random_password" "k3s_token" {
   special = false
 }
 
+# # Outputs
+# output "nginx_public_ip" {
+#   value = aws_instance.nginx.public_ip
+# }
+
+# output "k3s_master_private_ip" {
+#   value = aws_instance.k3s_master.private_ip
+# }
+
+# output "k3s_worker_private_ips" {
+#   value = aws_instance.k3s_workers[*].private_ip
+# }
+
+# output "k3s_token" {
+#   value     = random_password.k3s_token.result
+#   sensitive = true
+# }
+
+# output "ssh_command" {
+#   value = "ssh -i ${path.module}/k3s-key-pair.pem -J ubuntu@${aws_instance.nginx.public_ip} ubuntu@<PRIVATE_IP>"
+#   description = "Command to SSH into private instances. Replace <PRIVATE_IP> with the desired instance's private IP."
+# }
+
+# output "key_pair_file" {
+#   value = local_file.private_key.filename
+#   description = "Path to the generated private key file"
+# }
+
 # Outputs
-output "nginx_public_ip" {
-  value = aws_instance.nginx.public_ip
+output "nginx_lb_public_ip" {
+  value = aws_instance.nginx_lb.public_ip
+  description = "Public IP address of the NGINX load balancer"
 }
 
 output "k3s_master_private_ip" {
@@ -354,11 +420,21 @@ output "k3s_token" {
 }
 
 output "ssh_command" {
-  value = "ssh -i ${path.module}/k3s-key-pair.pem -J ubuntu@${aws_instance.nginx.public_ip} ubuntu@<PRIVATE_IP>"
+  value = "ssh -i ${path.module}/k3s-key-pair.pem -J ubuntu@${aws_instance.nginx_lb.public_ip} ubuntu@<PRIVATE_IP>"
   description = "Command to SSH into private instances. Replace <PRIVATE_IP> with the desired instance's private IP."
 }
 
 output "key_pair_file" {
   value = local_file.private_key.filename
   description = "Path to the generated private key file"
+}
+
+output "internet_test_command" {
+  value = "ssh -i ${path.module}/k3s-key-pair.pem -J ubuntu@${aws_instance.nginx_lb.public_ip} ubuntu@${aws_instance.k3s_master.private_ip} 'cat /tmp/internet_test_result.txt'"
+  description = "Command to check the result of the internet connectivity test on the master node"
+}
+#Output for accessing the load-balanced web page
+output "load_balanced_url" {
+  value = "http://${aws_instance.nginx_lb.public_ip}"
+  description = "URL to access the load-balanced web pages"
 }

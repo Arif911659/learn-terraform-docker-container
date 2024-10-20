@@ -1,0 +1,102 @@
+Outputs:
+
+internet_test_command = "ssh -i ./k3s-key-pair.pem -J ubuntu@18.142.181.187 ubuntu@10.0.2.70 'cat /tmp/internet_test_result.txt'"
+k3s_master_private_ip = "10.0.2.70"
+k3s_token = <sensitive>
+k3s_worker_private_ips = [
+  "10.0.2.144",
+  "10.0.2.250",
+]
+key_pair_file = "./k3s-key-pair.pem"
+load_balanced_url = "http://18.142.181.187"
+nginx_lb_public_ip = "18.142.181.187"
+ssh_command = "ssh -i ./k3s-key-pair.pem -J ubuntu@18.142.181.187 ubuntu@<PRIVATE_IP>"
+ssh -i k3s-key-pair.pem ubuntu@10.0.2.70
+ssh -i k3s-key-pair.pem ubuntu@10.0.2.144
+ssh -i k3s-key-pair.pem ubuntu@10.0.2.250
+
+sudo cat /var/lib/rancher/k3s/server/node-token
+K10500be4356d522da993d543efe03880c814a7cababdbbe1fcf8ee76f0c25e7aa2::server:SrTYIeni7mNua5gwnmbCgAk61zwnr8fr
+
+curl -sfL https://get.k3s.io | K3S_URL=https://10.0.2.70:6443 K3S_TOKEN=K10500be4356d522da993d543efe03880c814a7cababdbbe1fcf8ee76f0c25e7aa2::server:SrTYIeni7mNua5gwnmbCgAk61zwnr8fr sh -
+=====================
+
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+error_log /var/log/nginx/error.log;
+include /etc/nginx/modules-enabled/*.conf;
+
+
+
+http {
+
+        ##
+        # Basic Settings
+        ##
+
+        sendfile on;
+        tcp_nopush on;
+        types_hash_max_size 2048;
+        # server_tokens off;
+
+        # server_names_hash_bucket_size 64;
+        # server_name_in_redirect off;
+
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+
+        ##
+        # SSL Settings
+        ##
+
+        ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3; # Dropping SSLv3, ref: POODLE
+        ssl_prefer_server_ciphers on;
+        ##
+        # Logging Settings
+        ##
+
+        access_log /var/log/nginx/access.log;
+
+        ##
+        # Gzip Settings
+        ##
+
+        gzip on;
+
+        # gzip_vary on;
+        # gzip_proxied any;
+        # gzip_comp_level 6;
+        # gzip_buffers 16 8k;
+        # gzip_http_version 1.1;
+        # gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+        ##
+        # Virtual Host Configs
+        ##
+
+        include /etc/nginx/conf.d/*.conf;
+        include /etc/nginx/sites-enabled/*;
+}
+
+
+#mail {
+#       # See sample authentication script at:
+#       # http://wiki.nginx.org/ImapAuthenticateWithApachePhpScript
+#
+#       # auth_http localhost/auth.php;
+#       # pop3_capabilities "TOP" "USER";
+#       # imap_capabilities "IMAP4rev1" "UIDPLUS";
+#
+#       server {
+#               listen     localhost:110;
+#               protocol   pop3;
+#               proxy      on;
+#       }
+#
+#       server {
+#               listen     localhost:143;
+#               protocol   imap;
+#               proxy      on;
+#       }
+#}
