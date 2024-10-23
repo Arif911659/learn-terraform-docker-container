@@ -1,0 +1,213 @@
+
+Outputs:
+
+keypair_location = "./my-keypair.pem"
+master_node_private_ip = "10.0.2.97"
+nginx_public_ip = "47.130.0.80"
+worker_node_private_ip = "10.0.2.155"
+==============================
+Step 5: Install and configure k3s and worker nodes
+Install k3s on Master Node:
+SSH into master node and run the following command to install k3s:
+curl -sfL https://get.k3s.io | sh -
+
+
+After installation, the master node should become the control plane for your Kubernetes cluster.
+
+
+
+Join Worker Nodes to the Cluster:
+Retrieve the token from the master node to join worker nodes:
+sudo cat /var/lib/rancher/k3s/server/node-token
+
+Copy the token.
+SSH into each worker node and run the following command to join it to the cluster (Remember to replace <master-ip> with the private IP of the master node and <token> with the token obtained earlier):
+curl -sfL https://get.k3s.io | K3S_URL=https://<master-ip>:6443 K3S_TOKEN=<token> sh -
+
+
+Check the status of k3s-agent
+
+
+
+Verify Cluster Setup
+SSH into the master node and set the permission.
+sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+
+
+Run this command to verify all nodes
+kubectl get nodes -o wide
+
+
+You should see the master node and both worker nodes listed as ready.
+
+Step 6: Deploy the servers in k3s cluster.
+SSH into the master node and create manifest directory
+SSH into Master instance and Create a directory (e.g., manifest)
+mkdir manifest
+cd manifest
+Create manifest for flask server
+Create manifest file for flask deployment (e.g., flask-app-deploy.yml) using 
+vim flask-app-deploy.yml command and edit as follows:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: flask-app
+  template:
+    metadata:
+      labels:
+        app: flask-app
+    spec:
+      containers:
+      - name: flask-app
+        image: arifhossaincse22/my-flask-api:latest
+        ports:
+        - containerPort: 5000
+      nodeSelector:
+        role: worker-node
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flask-app-service
+spec:
+  type: NodePort
+  selector:
+    app: flask-app
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+      nodePort: 30001
+
+
+
+
+With this configuration, k3s will schedule your pods on nodes with the label role=worker-node, which in this case are worker1 and worker2.
+Create manifest for react app
+Create manifest file for react app deployment (e.g., react-app-deploy.yml) using 
+vim react-app-deploy.yml command and edit as follows:
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: react-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: react-app
+  template:
+    metadata:
+      labels:
+        app: react-app
+    spec:
+      containers:
+      - name: react-app
+        image: arifhossaincse22/my-react-app:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: REACT_APP_API_URL
+          #value: "http://<master-node-IP>:<Flask-App-NodePort>"  # Edit with your master IP and NodePort of your flask app service
+          value: "http://10.0.2.97:30001"  # Edit with your master IP and NodePort of your flask app service
+      nodeSelector:
+        role: worker-node    
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: react-app-service
+spec:
+  type: NodePort
+  selector:
+    app: react-app
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+      nodePort: 30002
+
+
+
+
+With this configuration, k3s will schedule your pods on nodes with the label role=worker-node, which in this case are worker1 and worker2.
+Label Your Worker Nodes
+We need to label both worker nodes as we want to deploy the flask server in both the worker nodes.
+Label worker-node-1:
+kubectl label nodes <worker-node-1> role=worker-node
+
+
+Label worker-node-2:
+kubectl label nodes <worker-node-2> role=worker-node
+ubuntu@master:~/manifest$ kubectl label nodes worker1 role=worker-node
+node/worker1 labeled
+ubuntu@master:~/manifest$ kubectl label nodes worker2 role=worker-node
+node/worker2 labeled
+
+
+NOTE: Make sure to replace it with your worker node name.
+Deploy the flask Server and react application
+Apply the manifests file:
+kubectl apply -f flask-app-deploy.yml
+kubectl apply -f react-app-deploy.yml
+	Check the created resources:
+kubectl get all
+
+
+You can see the created pods, deployemt and service. Make sure all are in the running state.
+Step 7: Install and configure nginx as layer 7 load balancer
+
+==============================
+==============================
+
+==============================
+In Nginx ec2 /etc/nginx/nginx.conf in the Nginx directory with the following configuration:
+
+events {}
+
+http {
+    upstream react_app {
+        server 10.0.2.155:30002; # Replace with actual worker1 IP and NodePort for React
+        
+    }
+
+    upstream flask_api {
+        server 10.0.2.155:30001; # Replace with actual worker1 IP and NodePort for Flask
+        
+    }
+
+    server {
+        listen 80;
+        server http://47.130.0.80/;
+
+        location / {
+            proxy_pass http://react_app;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+
+    server {
+        listen 80;
+        server http://47.130.0.80/;
+
+        location / {
+            proxy_pass http://flask_api;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+}
