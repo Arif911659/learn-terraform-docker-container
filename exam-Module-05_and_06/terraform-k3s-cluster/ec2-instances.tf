@@ -10,6 +10,7 @@ resource "aws_instance" "master" {
   user_data = <<-EOF
               #!/bin/bash
               apt-get update
+              sudo hostnamectl hostname master
               apt-get install -y curl
               curl -sfL https://get.k3s.io | sh -s - server --token=${random_password.k3s_token.result}
               
@@ -17,6 +18,10 @@ resource "aws_instance" "master" {
                 sleep 60
                 echo "Waiting for k3s to start..."
               done
+              #SSH into the master node and set the permission.
+              sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+
+              echo "k3s master node is ready"
               EOF
 
   tags = {
@@ -58,8 +63,10 @@ resource "aws_instance" "nginx" {
               #!/bin/bash
               apt update
               apt install -y nginx
+              sudo hostnamectl hostname nginx-lb
 
-              # Create NGINX configuration for load balancing
+              # Create an Nginx configuration file for load balancing
+                            # Create NGINX configuration for load balancing
               cat > /etc/nginx/nginx.conf <<EOL
               events {}
 
@@ -104,4 +111,9 @@ resource "aws_instance" "nginx" {
   }
 
   depends_on = [aws_instance.master, aws_instance.k3s_workers]
+}
+# Generate a random token for k3s
+resource "random_password" "k3s_token" {
+  length  = 32
+  special = false
 }
