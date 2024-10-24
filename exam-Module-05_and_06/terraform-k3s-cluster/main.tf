@@ -1,30 +1,65 @@
+# Provider configuration
 provider "aws" {
-  region = var.region
+  region = var.aws_region
+}
+
+# Generate a new key pair
+resource "tls_private_key" "k3s_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+# Create a key pair in AWS
+resource "aws_key_pair" "k3s_key_pair" {
+  key_name   = "k3s-key-pair"
+  public_key = tls_private_key.k3s_key.public_key_openssh
+}
+
+# Store the private key locally
+resource "local_file" "private_key" {
+  content         = tls_private_key.k3s_key.private_key_pem
+  filename        = "${path.module}/k3s-key-pair.pem"
+  file_permission = "0600"
 }
 
 # Create VPC
 resource "aws_vpc" "main" {
-  cidr_block = var.vpc_cidr
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+
+  tags = {
+    Name = "k3s-vpc"
+  }
 }
 
 # Public Subnet for Nginx Load Balancer
 resource "aws_subnet" "public" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.public_subnet_cidr
-  availability_zone = "ap-southeast-1a"
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.public_subnet_cidr
   map_public_ip_on_launch = true
+
+  tags = {
+    Name = "k3s-public-subnet"
+  }
 }
 
 # Private Subnet for k3s cluster (Master and Worker)
 resource "aws_subnet" "private" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private_subnet_cidr
-  availability_zone = "ap-southeast-1a"
+  vpc_id     = aws_vpc.main.id
+  cidr_block = var.private_subnet_cidr
+
+  tags = {
+    Name = "k3s-private-subnet"
+  }
 }
 
 # Internet Gateway for Public Subnet
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "k3s-igw"
+  }
 }
 
 # Route Table for Public Subnet
@@ -35,22 +70,9 @@ resource "aws_route_table" "public" {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-}
-
-resource "aws_route_table_association" "public" {
-  subnet_id      = aws_subnet.public.id
-  route_table_id = aws_route_table.public.id
-}
-
-# Elastic IP for NAT Gateway (to enable internet access in private subnet)
-resource "aws_eip" "nat" {
-    domain = "vpc"
-}
-
-# NAT Gateway in Public Subnet for Private Subnet Internet Access
-resource "aws_nat_gateway" "nat" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public.id
+  tags = {
+    Name = "k3s-public-rt"
+  }
 }
 
 # Route Table for Private Subnet to use NAT Gateway
@@ -61,16 +83,47 @@ resource "aws_route_table" "private" {
     cidr_block = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.nat.id
   }
+  tags = {
+    Name = "k3s-private-rt"
+  }
 }
 
+# Route Table Associations
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
 # Associate Private Subnet with the Private Route Table
 resource "aws_route_table_association" "private" {
   subnet_id      = aws_subnet.private.id
   route_table_id = aws_route_table.private.id
 }
 
+# Elastic IP for NAT Gateway (to enable internet access in private subnet)
+resource "aws_eip" "nat" {
+    domain = "vpc"
+}
+
+# NAT Gateway in Public Subnet for Private Subnet Internet Access
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public.id
+
+  tags = {
+    Name = "k3s-nat-gw"
+  }
+}
+
+# # Associate Private Subnet with the Private Route Table
+# resource "aws_route_table_association" "private" {
+#   subnet_id      = aws_subnet.private.id
+#   route_table_id = aws_route_table.private.id
+# }
+
 # Security Group for k3s cluster (Master and Worker)
 resource "aws_security_group" "k3s_cluster" {
+  name = "k3s-cluster-sg"
+  description = "Security group for k3s cluster"
   vpc_id = aws_vpc.main.id
 
   # Ingress: Allow all traffic from within the VPC
@@ -81,23 +134,23 @@ resource "aws_security_group" "k3s_cluster" {
     cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
+  # Egress: Allow all outbound traffic (default is usually open, but explicitly setting it here)
   egress {
     from_port   = 0
     to_port     = 0
-    protocol    = "-1"
+    protocol    = "-1"  # -1 means all protocols
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "k3s-cluster-sg"
   }
 }
 
 # Security Group for Nginx Load Balancer
 resource "aws_security_group" "nginx" {
+  name        = "nginx-sg"
+  description = "Security group for NGINX load balancer and SSH bastion"
   vpc_id = aws_vpc.main.id
 
   ingress {
@@ -106,13 +159,20 @@ resource "aws_security_group" "nginx" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  ingress {
+    from_port   = 6443
+    to_port     = 6443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }  
+
   ingress {
     from_port   = 22
     to_port     = 22
@@ -125,105 +185,4 @@ resource "aws_security_group" "nginx" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-}
-
-# Generate key pair and save it locally as my-keypair.pem
-resource "tls_private_key" "my_key" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
-}
-
-resource "local_file" "my_key" {
-  content  = tls_private_key.my_key.private_key_pem
-  filename = "${path.module}/my-keypair.pem"  # Key pair will be saved in the current directory
-}
-
-resource "aws_key_pair" "my_keypair" {
-  key_name   = var.key_name
-  public_key = tls_private_key.my_key.public_key_openssh
-}
-
-# EC2 instance for k3s Master Node in Private Subnet
-resource "aws_instance" "master" {
-  ami           = "ami-047126e50991d067b"  # Ubuntu 22.04 LTS
-  instance_type = var.instance_type
-  subnet_id     = aws_subnet.private.id
-  key_name      = aws_key_pair.my_keypair.key_name
-  #security_groups = [aws_security_group.k3s_cluster.name]
-  vpc_security_group_ids      = [aws_security_group.k3s_cluster.id]   # Replace group_name with vpc_security_group_ids
-
-  user_data = <<-EOF
-              #!/bin/bash
-              curl -sfL https://get.k3s.io | sh -s - server --token=${random_password.k3s_token.result}
-              
-              # Wait for k3s to start
-              while ! systemctl is-active --quiet k3s; do
-                sleep 60
-                echo "Waiting for k3s to start..."
-              done
-              EOF
-    tags = {
-        Name = "k3s-master"
-    }
-}
-
-# EC2 instance for k3s Worker Node in Private Subnet
-resource "aws_instance" "worker" {
-  ami           = "ami-047126e50991d067b"  # Ubuntu 22.04 LTS
-  instance_type = var.instance_type
-  subnet_id     = aws_subnet.private.id
-  key_name      = aws_key_pair.my_keypair.key_name
-  #security_groups = [aws_security_group.k3s_cluster.name]
-  vpc_security_group_ids      = [aws_security_group.k3s_cluster.id]   # Replace group_name with vpc_security_group_ids
-
-  user_data = <<-EOF
-              #!/bin/bash
-              apt-get update
-              apt-get install -y curl
-              curl -sfL https://get.k3s.io | K3S_URL=https://${aws_instance.master.private_ip}:6443 K3S_TOKEN=${random_password.k3s_token.result} sh -
-              EOF
-
-  tags = {
-    Name = "k3s-worker-${count.index + 1}"
-  }
-
-  depends_on = [aws_instance.master]
-}
-
-# Nginx Load Balancer in Public Subnet
-resource "aws_instance" "nginx" {
-  ami           = "ami-047126e50991d067b"  # Ubuntu 22.04 LTS
-  instance_type = var.instance_type
-#   subnet_id     = aws_subnet.public.id
-#   key_name      = aws_key_pair.my_keypair.key_name
-#   security_groups = [aws_security_group.nginx.name]
-  subnet_id                   = aws_subnet.public.id      # Nginx in public subnet
-  key_name                    = aws_key_pair.my_keypair.key_name
-  vpc_security_group_ids      = [aws_security_group.nginx.id]  # Use vpc_security_group_ids
-
-
-  user_data = <<-EOF
-              #!/bin/bash
-              apt update
-              apt install -y nginx
-              cat <<EOL > /etc/nginx/conf.d/default.conf
-              upstream k3s_cluster {
-                  server ${aws_instance.master.private_ip}:80;
-                  server ${aws_instance.worker.private_ip}:80;
-              }
-
-              server {
-                  listen 80;
-                  location / {
-                      proxy_pass http://k3s_cluster;
-                  }
-              }
-              EOL
-              systemctl restart nginx
-              EOF
-
-        tags = {
-          name = "nginx-lb"
-        }
-    depends_on = [ aws_instance.master, aws_instance.worker ]
 }

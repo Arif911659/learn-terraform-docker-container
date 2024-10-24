@@ -1,4 +1,5 @@
-variable "region" {
+# Variables
+variable "aws_region" {
   default = "ap-southeast-1"
 }
 
@@ -16,6 +17,10 @@ variable "private_subnet_cidr" {
 
 variable "instance_type" {
   default = "t3.small"
+}
+# Ubuntu 22.04 LTS AMI (adjust the AMI ID for your region)
+variable "ubuntu_ami" {
+  default = "ami-047126e50991d067b"  # Ubuntu 22.04 LTS
 }
 
 variable "key_name" {
