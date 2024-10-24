@@ -1,0 +1,7 @@
+alb-lab/
+├── main.tf
+├── variables.tf
+├── outputs.tf
+├── vpc.tf
+├── ec2.tf
+├── alb.tf
