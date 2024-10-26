@@ -1,14 +1,12 @@
 Outputs:
 
 keypair_location = "./my-keypair.pem"
-
-nginx_public_ip = "47.129.107.51"
-nginx_private_ip =10.0.1.105
-
-master_node_private_ip = "10.0.2.184"
+master_node_private_ip = "10.0.2.7"
+nginx_private_ip = "10.0.1.179"
+nginx_public_ip = "47.129.106.176"
 worker_node_private_ip = [
-  "10.0.2.74",
-  "10.0.2.63",
+  "10.0.2.190",
+  "10.0.2.239",
 ]
 ==============================
 Step 5: Install and configure k3s and worker nodes
