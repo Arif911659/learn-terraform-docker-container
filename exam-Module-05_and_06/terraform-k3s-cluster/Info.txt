@@ -76,7 +76,6 @@ spec:
       nodeSelector:
         role: worker-node
 
-
 ---
 apiVersion: v1
 kind: Service
@@ -122,7 +121,7 @@ spec:
         env:
         - name: REACT_APP_API_URL
           #value: "http://<master-node-IP>:<Flask-App-NodePort>"  # Edit with your master IP and NodePort of your flask app service
-          value: "http://10.0.2.97:30001"  # Edit with your master IP and NodePort of your flask app service
+          value: "http://10.0.2.184:30001"  # Edit with your master IP and NodePort of your flask app service
       nodeSelector:
         role: worker-node    
 

@@ -1,0 +1,236 @@
+k3s-terraform-blueprint/
+├── main.tf
+├── providers.tf
+├── variables.tf
+├── outputs.tf
+├── modules/
+│   ├── network/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   ├── compute/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   └── load_balancer/
+│       ├── main.tf
+│       ├── variables.tf
+│       └── outputs.tf
+
+
+1. Network Module
+The network module will handle VPC, public and private subnets, and routing.
+
+modules/network/main.tf
+
+resource "aws_vpc" "main" {
+  cidr_block = var.vpc_cidr
+}
+
+resource "aws_subnet" "public" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.public_subnet_cidr
+  map_public_ip_on_launch = true
+}
+
+resource "aws_subnet" "private" {
+  vpc_id     = aws_vpc.main.id
+  cidr_block = var.private_subnet_cidr
+}
+
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+}
+
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+
+output "vpc_id" {
+  value = aws_vpc.main.id
+}
+
+output "public_subnet_id" {
+  value = aws_subnet.public.id
+}
+
+output "private_subnet_id" {
+  value = aws_subnet.private.id
+}
+modules/network/variables.tf
+
+variable "vpc_cidr" {
+  type        = string
+  description = "CIDR block for VPC"
+}
+
+variable "public_subnet_cidr" {
+  type        = string
+  description = "CIDR block for public subnet"
+}
+
+variable "private_subnet_cidr" {
+  type        = string
+  description = "CIDR block for private subnet"
+}
+2. Compute Module
+The compute module will create EC2 instances for the k3s master and worker nodes in the private subnet.
+
+modules/compute/main.tf
+
+resource "aws_instance" "k3s_master" {
+  ami           = var.ami
+  instance_type = var.instance_type
+  subnet_id     = var.private_subnet_id
+  key_name      = var.key_name
+
+  tags = {
+    Name = "k3s-master"
+  }
+}
+
+resource "aws_instance" "k3s_worker" {
+  count         = var.worker_count
+  ami           = var.ami
+  instance_type = var.instance_type
+  subnet_id     = var.private_subnet_id
+  key_name      = var.key_name
+
+  tags = {
+    Name = "k3s-worker-${count.index + 1}"
+  }
+}
+
+output "k3s_master_private_ip" {
+  value = aws_instance.k3s_master.private_ip
+}
+
+output "k3s_worker_private_ips" {
+  value = [for instance in aws_instance.k3s_worker : instance.private_ip]
+}
+modules/compute/variables.tf
+
+variable "ami" {
+  type        = string
+  description = "AMI for EC2 instances"
+}
+
+variable "instance_type" {
+  type        = string
+  description = "Instance type for k3s nodes"
+}
+
+variable "private_subnet_id" {
+  type        = string
+  description = "Private subnet ID"
+}
+
+variable "key_name" {
+  type        = string
+  description = "Key pair name for EC2 instances"
+}
+
+variable "worker_count" {
+  type        = number
+  default     = 2
+  description = "Number of worker nodes"
+}
+3. Load Balancer Module
+This module will set up an Nginx server as a load balancer in the public subnet, routing requests to the private subnet.
+
+modules/load_balancer/main.tf
+
+resource "aws_instance" "nginx_lb" {
+  ami           = var.ami
+  instance_type = var.instance_type
+  subnet_id     = var.public_subnet_id
+  key_name      = var.key_name
+
+  user_data = <<-EOF
+              #!/bin/bash
+              apt update -y
+              apt install nginx -y
+              echo "upstream k3s_nodes {" >> /etc/nginx/nginx.conf
+              EOF
+
+  tags = {
+    Name = "nginx-lb"
+  }
+}
+
+output "lb_public_ip" {
+  value = aws_instance.nginx_lb.public_ip
+}
+modules/load_balancer/variables.tf
+
+variable "ami" {
+  type        = string
+  description = "AMI for Nginx load balancer"
+}
+
+variable "instance_type" {
+  type        = string
+  description = "Instance type for Nginx load balancer"
+}
+
+variable "public_subnet_id" {
+  type        = string
+  description = "Public subnet ID"
+}
+
+variable "key_name" {
+  type        = string
+  description = "Key pair name for EC2 instances"
+}
+4. Main Configuration
+The main.tf file ties together all modules and specifies values for the variables.
+
+main.tf
+
+module "network" {
+  source             = "./modules/network"
+  vpc_cidr           = "10.0.0.0/16"
+  public_subnet_cidr = "10.0.1.0/24"
+  private_subnet_cidr = "10.0.2.0/24"
+}
+
+module "compute" {
+  source             = "./modules/compute"
+  ami                = "ami-0c55b159cbfafe1f0" # Example Ubuntu AMI
+  instance_type      = "t2.micro"
+  private_subnet_id  = module.network.private_subnet_id
+  key_name           = var.key_name
+  worker_count       = 2
+}
+
+module "load_balancer" {
+  source             = "./modules/load_balancer"
+  ami                = "ami-0c55b159cbfafe1f0" # Example Ubuntu AMI for Nginx
+  instance_type      = "t2.micro"
+  public_subnet_id   = module.network.public_subnet_id
+  key_name           = var.key_name
+}
+
+output "lb_public_ip" {
+  value = module.load_balancer.lb_public_ip
+}
+5. Variables and Outputs
+Add a variables.tf file for common variables, including key_name for the EC2 key pair.
+
+variables.tf
+
+variable "key_name" {
+  type        = string
+  description = "Key pair for SSH access to EC2 instances"
+}
+This setup will create a k3s cluster in a private subnet and an Nginx load balancer in a public subnet. You can further configure the Nginx server to forward traffic to the k3s nodes once you install k3s on the EC2 instances. Let me know if you need any additional guidance!
