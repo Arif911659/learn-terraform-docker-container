@@ -10,3 +10,4 @@ my-keypair.pem
 .terraform.lock.hcl
 terraform.tfstate
 terraform.tfstate.*
+*.pem
