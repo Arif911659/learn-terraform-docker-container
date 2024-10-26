@@ -22,5 +22,20 @@ output "nginx_private_ip" {
 # Output the key pair location
 output "keypair_location" {
   description = "Location of the key pair in the local machine"
-  value       = "${path.module}/k3s-key-pair.pem"
+  value       = "${path.module}/k3s-keypair.pem"
 }
+
+output "master_node_hostname" {
+  description = "Hostname of the k3s master node"
+  value       = aws_instance.k3s_master.tags.Name
+}
+output "worker_node_hostname" {
+  description = "Hostname of the k3s worker node"
+  value       = aws_instance.k3s_worker.*.tags.Name
+}
+output "nginx_hostname" {
+  description = "Hostname of the Nginx load balancer"
+  value       = aws_instance.nginx.tags.Name
+}
+
+

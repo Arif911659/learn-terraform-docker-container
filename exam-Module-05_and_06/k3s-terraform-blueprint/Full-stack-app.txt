@@ -1,0 +1,307 @@
+a professional full stack application using react and flask which is dockize and make yaml for deployments
+# Build and push Docker images to your registry
+docker build -t your-registry/frontend:latest frontend/
+docker build -t your-registry/backend:latest backend/
+docker push your-registry/frontend:latest
+docker push your-registry/backend:latest
+
+# Apply Kubernetes configurations
+kubectl apply -f k8s/
+
+
+Key features of this setup:
+
+Frontend:
+
+
+React with Material-UI for clean, responsive design
+Production-ready Nginx configuration
+Environment variable support
+
+
+Backend:
+
+
+Flask with CORS support
+Gunicorn for production deployment
+Configuration management
+
+
+Docker:
+
+
+Multi-stage build for frontend
+Optimized base images
+Environment variable support
+Docker Compose for local development
+
+
+Kubernetes:
+
+
+Scalable deployments with multiple replicas
+Resource limits and requests
+Load balancing
+Secret management
+Separate services for frontend and backend
+=============
+Full Stack Application Structure
+📁 fullstack-app/
+├── 📁 frontend/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── public/
+│   └── src/
+│       ├── App.js
+│       ├── components/
+│       └── services/
+├── 📁 backend/
+│   ├── Dockerfile
+│   ├── app.py
+│   ├── requirements.txt
+│   └── config.py
+├── docker-compose.yml
+└── 📁 k8s/
+    ├── frontend-deployment.yaml
+    ├── backend-deployment.yaml
+    ├── frontend-service.yaml
+    └── backend-service.yaml
+
+===========================
+##############Frontend React Application##############
+// frontend/src/App.js
+import React, { useState, useEffect } from 'react';
+import { Container, Typography, Box, CircularProgress } from '@mui/material';
+
+const App = () => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/data')
+      .then(response => response.json())
+      .then(data => {
+        setData(data);
+        setLoading(false);
+      })
+      .catch(error => console.error('Error:', error));
+  }, []);
+
+  return (
+    <Container maxWidth="md">
+      <Box sx={{ my: 4 }}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          Full Stack Application
+        </Typography>
+        {loading ? (
+          <CircularProgress />
+        ) : (
+          <Typography variant="body1">
+            {JSON.stringify(data)}
+          </Typography>
+        )}
+      </Box>
+    </Container>
+  );
+};
+
+export default App;
+##############
+// frontend/package.json
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@mui/material": "^5.11.0",
+    "@emotion/react": "^11.10.5",
+    "@emotion/styled": "^11.10.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  }
+}
+
+############################Backend Flask Application##############
+
+# backend/app.py
+from flask import Flask, jsonify
+from flask_cors import CORS
+import config
+
+app = Flask(__name__)
+CORS(app)
+
+@app.route('/api/data')
+def get_data():
+    return jsonify({
+        "message": "Hello from Flask!",
+        "status": "success"
+    })
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+##############
+# backend/requirements.txt
+flask==2.0.1
+flask-cors==3.0.10
+gunicorn==20.1.0
+##############
+# backend/config.py
+import os
+
+class Config:
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-key'
+    DEBUG = False
+	
+###################Docker Configuration#######################Docker Configuration
+
+# frontend/Dockerfile
+FROM node:16-alpine as build
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=build /app/build /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+
+##############
+# backend/Dockerfile
+
+FROM python:3.9-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE 5000
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+
+##############
+
+# docker-compose.yml
+version: '3.8'
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000
+
+  backend:
+    build: ./backend
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=your-secret-key
+	  
+##############Kubernetes Configuration##############
+
+# k8s/frontend-deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: frontend:latest
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+			
+---
+# k8s/frontend-service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+spec:
+  selector:
+    app: frontend
+  ports:
+  - port: 80
+    targetPort: 80
+  type: LoadBalancer
+
+##############
+# k8s/backend-deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: backend:latest
+        ports:
+        - containerPort: 5000
+        env:
+        - name: FLASK_ENV
+          value: "production"
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: secret-key
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "250m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+---
+# k8s/backend-service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+spec:
+  selector:
+    app: backend
+  ports:
+  - port: 5000
+    targetPort: 5000
+  type: ClusterIP

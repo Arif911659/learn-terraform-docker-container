@@ -1,22 +1,19 @@
-aws_instance.k3s_worker[0]: Creation complete after 12s [id=i-00c2c6f39f17296e3]
-aws_instance.k3s_worker[1]: Creation complete after 13s [id=i-0ed440ca88bbbf847]
-aws_instance.nginx: Creation complete after 13s [id=i-03ad0e29d3c0c3efd]
-
 Outputs:
 
-keypair_location = "./k3s-key-pair.pem"
-master_node_private_ip = "10.0.2.114"
-nginx_private_ip = "10.0.1.82"
-nginx_public_ip = "47.129.186.77"
-worker_node_private_ip = [
-  "10.0.2.60",
-  "10.0.2.177",
+keypair_location = "./k3s-keypair.pem"
+master_node_hostname = "k3s-master"
+master_node_private_ip = "10.0.2.133"
+nginx_hostname = "nginx-lb"
+nginx_private_ip = "10.0.1.42"
+nginx_public_ip = "13.250.3.233"
+worker_node_hostname = [
+  "k3s-worker-1",
+  "k3s-worker-2",
 ]
-
-
-
-
-
+worker_node_private_ip = [
+  "10.0.2.47",
+  "10.0.2.213",
+]
 
 =========================
 k3s-terraform-blueprint/
