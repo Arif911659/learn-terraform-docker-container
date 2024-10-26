@@ -4,7 +4,7 @@
 # Ignore override files as they are usually used to override resources locally
 *.tfoverride
 *.tfplan
-
+my-keypair.pem
 # Ignore CLI configuration files
 .terraformrc
 .terraform.lock.hcl
