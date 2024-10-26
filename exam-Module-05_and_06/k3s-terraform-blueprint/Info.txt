@@ -1,3 +1,24 @@
+aws_instance.k3s_worker[0]: Creation complete after 12s [id=i-00c2c6f39f17296e3]
+aws_instance.k3s_worker[1]: Creation complete after 13s [id=i-0ed440ca88bbbf847]
+aws_instance.nginx: Creation complete after 13s [id=i-03ad0e29d3c0c3efd]
+
+Outputs:
+
+keypair_location = "./k3s-key-pair.pem"
+master_node_private_ip = "10.0.2.114"
+nginx_private_ip = "10.0.1.82"
+nginx_public_ip = "47.129.186.77"
+worker_node_private_ip = [
+  "10.0.2.60",
+  "10.0.2.177",
+]
+
+
+
+
+
+
+=========================
 k3s-terraform-blueprint/
 ├── main.tf
 ├── providers.tf
@@ -234,3 +255,180 @@ variable "key_name" {
   description = "Key pair for SSH access to EC2 instances"
 }
 This setup will create a k3s cluster in a private subnet and an Nginx load balancer in a public subnet. You can further configure the Nginx server to forward traffic to the k3s nodes once you install k3s on the EC2 instances. Let me know if you need any additional guidance!
+
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-api
+  labels:
+    app: flask-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: flask-api
+  template:
+    metadata:
+      labels:
+        app: flask-api
+    spec:
+      containers:
+      - name: flask-api
+        image: arifhossaincse22/flask-api:latest
+        ports:
+        - containerPort: 5000
+---
+# Flask API service
+apiVersion: v1
+kind: Service
+metadata:
+  name: flask-api
+  namespace: default
+spec:
+  type: NodePort
+  selector:
+    app: flask-api
+  ports:
+    - port: 5000
+      targetPort: 5000
+      nodePort: 30001
+
+
+
+2. React App Deployment and Service
+react-deployment.yaml
+
+
+ubuntu@master:~$ cat react-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: react-app
+  labels:
+    app: react-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: react-app
+  template:
+    metadata:
+      labels:
+        app: react-app
+    spec:
+      containers:
+      - name: react-app
+        image: arifhossaincse22/react-app:latest
+        ports:
+        - containerPort: 3000
+---
+# React app service
+apiVersion: v1
+kind: Service
+metadata:
+  name: react-app
+  namespace: default
+spec:
+  type: NodePort
+  selector:
+    app: react-app
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30002
+
+
+
+===============================
+
+ubuntu@nginx-lb:~$ cat /etc/nginx/nginx.conf
+events {
+                  worker_connections 1024;
+              }
+
+              http {
+                  upstream react_app {
+                      least_conn;
+                      server 10.0.2.114:30002 max_fails=3 fail_timeout=30s;
+                      server 10.0.2.60:30002 max_fails=3 fail_timeout=30s;
+                      server 10.0.2.177:30002 max_fails=3 fail_timeout=30s;
+                  }
+
+                  upstream flask_api {
+                      least_conn;
+                      server 10.0.2.114:30001 max_fails=3 fail_timeout=30s;
+                      server 10.0.2.60:30001 max_fails=3 fail_timeout=30s;
+                      server 10.0.2.177:30001 max_fails=3 fail_timeout=30s;
+                  }
+
+                  server {
+                      listen 80;
+                      server_name _;
+
+                      # Health check endpoint
+                      location /health {
+                          return 200 'healthy\n';
+                          add_header Content-Type text/plain;
+                      }
+
+                      location / {
+                          proxy_pass http://react_app;
+                          proxy_http_version 1.1;
+                          proxy_set_header Host \$host;
+                          proxy_set_header X-Real-IP \$remote_addr;
+                          proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for                                ;
+                          proxy_set_header X-Forwarded-Proto \$scheme;
+
+                          # Timeouts
+                          proxy_connect_timeout 60s;
+                          proxy_send_timeout 60s;
+                          proxy_read_timeout 60s;
+                      }
+
+                      location /api/ {
+                          proxy_pass http://flask_api;
+                          proxy_http_version 1.1;
+                          proxy_set_header Host \$host;
+                          proxy_set_header X-Real-IP \$remote_addr;
+                          proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for                                ;
+                          proxy_set_header X-Forwarded-Proto \$scheme;
+
+                          # Timeouts
+                          proxy_connect_timeout 60s;
+                          proxy_send_timeout 60s;
+                          proxy_read_timeout 60s;
+                      }
+                  }
+              }
+===>>>
+1. Check Nginx User Permissions
+Ensure that Nginx has the correct permissions for the /run/ directory. You can adjust the permissions with:
+
+
+sudo chown -R www-data:www-data /run/nginx.pid
+
+2. Restart Nginx with Elevated Permissions
+Try restarting Nginx with sudo to ensure it has the necessary permissions:
+
+
+sudo systemctl restart nginx
+
+3. Verify and Update nginx.conf Permissions
+Confirm that the nginx.conf file and its directories are owned by root or the Nginx user:
+
+
+sudo chown root:root /etc/nginx/nginx.conf
+
+4. Check for Open Nginx Processes
+Sometimes an existing Nginx process might be preventing changes. Stop any running Nginx processes, and restart:
+
+
+sudo pkill nginx
+sudo systemctl start nginx
+
+5. Test Nginx Configuration
+Finally, re-test your Nginx configuration to confirm no further syntax or permission issues:
+
+
+sudo nginx -t

@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: react-app
+  labels:
+    app: react-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: react-app
+  template:
+    metadata:
+      labels:
+        app: react-app
+    spec:
+      containers:
+      - name: react-app
+        image: arifhossaincse22/react-app:latest
+        ports:
+        - containerPort: 3000
+---
+# React app service
+apiVersion: v1
+kind: Service
+metadata:
+  name: react-app
+  namespace: default
+spec:
+  type: NodePort
+  selector:
+    app: react-app
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30002
