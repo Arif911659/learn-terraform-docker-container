@@ -1,0 +1,11 @@
+# # Create requirements.txt
+# echo "fastapi==0.68.0
+# uvicorn==0.15.0
+# sqlalchemy==1.4.23
+# pydantic==1.8.2
+# sqlite3" > requirements.txt
+
+fastapi==0.68.0
+uvicorn==0.15.0
+sqlalchemy==1.4.23
+pydantic==1.8.2

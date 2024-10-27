@@ -1,0 +1,116 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: covid-backend
+    ports:
+      - "8000:8000"
+    networks:
+      - covid_network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: covid-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - covid_network
+    restart: unless-stopped
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: covid-nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - covid_network
+    restart: unless-stopped
+
+networks:
+  covid_network:
+    name: covid_network
+    driver: bridge
+
+
+
+# version: '3.8'
+
+# services:
+#   backend:
+#     build:
+#       context: ./backend
+#       dockerfile: Dockerfile
+#     container_name: covid-backend
+#     ports:
+#       - "8000:8000"
+#     volumes:
+#       - ./backend:/app
+#       - covid_data:/app/data
+#     environment:
+#       - DATABASE_URL=sqlite:///data/covid.db
+#       - CORS_ORIGINS=http://localhost:3000
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+#     networks:
+#       - covid_network
+#     restart: unless-stopped
+
+#   frontend:
+#     build:
+#       context: ./frontend
+#       dockerfile: Dockerfile
+#     container_name: covid-frontend
+#     ports:
+#       - "3000:3000"
+#     volumes:
+#       - ./frontend:/app
+#       - /app/node_modules
+#     environment:
+#       - REACT_APP_API_URL=http://localhost:8000
+#       - NODE_ENV=development
+#     depends_on:
+#       - backend
+#     networks:
+#       - covid_network
+#     restart: unless-stopped
+
+#   nginx:
+#     image: nginx:alpine
+#     container_name: covid-nginx
+#     ports:
+#       - "80:80"
+#     volumes:
+#       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+#       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+#       - ./logs:/var/log/nginx  # Optional: for persistent logs
+#     depends_on:
+#       - frontend
+#       - backend
+#     networks:
+#       - covid_network
+#     restart: unless-stopped
+
+# volumes:
+#   covid_data:
+#     name: covid_data
+
+# networks:
+#   covid_network:
+#     name: covid_network
+#     driver: bridge
