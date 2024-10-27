@@ -1,14 +1,5 @@
 a professional full stack application using react and flask which is dockize and make yaml for deployments
 
-1. Run
-
-docker login -u arifhossaincse22
-
-2. At the password prompt, enter the personal access token.
-
-====>>>>dckr_pat_-eHHnmtxzj1npxfb7rfyHxtMafw<<<======
-
-
 # Build and push Docker images to your registry
 docker build -t arifhossaincse22/frontend:latest frontend/
 docker build -t arifhossaincse22/backend:latest backend/
