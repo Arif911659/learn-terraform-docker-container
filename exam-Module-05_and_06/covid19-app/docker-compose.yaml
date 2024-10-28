@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: covid-backend:latest  # Custom image name
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: covid-frontend:latest  # Custom image name
+    ports:
+      - "3000:30001"
+    depends_on:
+      - backend

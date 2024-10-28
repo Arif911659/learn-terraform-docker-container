@@ -1,0 +1,432 @@
+Let’s go step-by-step to set up and run a basic COVID-19 full-stack application with a Node.js frontend and Flask backend. We’ll cover everything from setting up the code to running it locally in Docker and Kubernetes (k3s).
+Step 1: Set Up the Project Folder Structure
+
+    Create a main project folder called covid19-app.
+    Inside covid19-app, create two folders named backend and frontend.
+    Inside covid19-app, create a k8s folder to hold Kubernetes files.
+
+Your project structure should look like this:
+
+covid19-app/
+├── backend/
+├── frontend/
+└── k8s/
+
+Step 2: Create the Backend (Python with Flask)
+
+The backend will fetch COVID-19 statistics and serve it to the frontend.
+1. Go to the backend folder:
+
+bash
+
+cd covid19-app/backend
+
+2. Create app.py file
+
+This file will contain the Flask code for the backend:
+
+python
+
+from flask import Flask, jsonify
+import requests
+
+app = Flask(__name__)
+
+@app.route('/api/covid-data', methods=['GET'])
+def get_covid_data():
+    try:
+        response = requests.get('https://api.covid19api.com/summary')
+        data = response.json()
+        return jsonify(data), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+
+3. Create requirements.txt file
+
+This file lists the Python packages required to run the backend:
+
+makefile
+
+Flask==2.0.1
+requests==2.26.0
+
+4. Create a Dockerfile
+
+This Dockerfile will build a Docker image for the backend:
+
+Dockerfile
+
+# Dockerfile
+FROM python:3.8
+WORKDIR /app
+COPY . .
+RUN pip install -r requirements.txt
+EXPOSE 5000
+CMD ["python", "app.py"]
+
+Step 3: Create the Frontend (Node.js with React)
+
+The frontend will fetch data from the backend and display it.
+1. Go to the frontend folder:
+
+bash
+
+cd ../frontend
+
+2. Create package.json
+
+This file defines the dependencies and scripts for the frontend project. Run the following command to initialize it:
+
+bash
+
+npm init -y
+
+Then open package.json and add the dependencies for React and Axios:
+
+json
+
+{
+  "name": "covid19-frontend",
+  "version": "1.0.0",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "react-scripts": "4.0.3"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build"
+  }
+}
+
+3. Install dependencies
+
+bash
+
+npm install
+
+4. Create src folder with App.js and index.js
+
+    Create a folder called src in frontend.
+    Inside src, create two files: App.js and index.js.
+
+    App.js:
+
+    javascript
+
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+
+function App() {
+  const [covidData, setCovidData] = useState(null);
+
+  useEffect(() => {
+    axios.get('/api/covid-data')
+      .then(response => setCovidData(response.data))
+      .catch(error => console.error('Error fetching data:', error));
+  }, []);
+
+  return (
+    <div className="App">
+      <h1>COVID-19 Statistics</h1>
+      {covidData ? (
+        <div>
+          <h2>Global Statistics</h2>
+          <p>New Confirmed: {covidData.Global.NewConfirmed}</p>
+          <p>Total Confirmed: {covidData.Global.TotalConfirmed}</p>
+          <p>Total Deaths: {covidData.Global.TotalDeaths}</p>
+        </div>
+      ) : (
+        <p>Loading data...</p>
+      )}
+    </div>
+  );
+}
+
+export default App;
+
+index.js:
+
+javascript
+
+    import React from 'react';
+    import ReactDOM from 'react-dom';
+    import App from './App';
+
+    ReactDOM.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>,
+      document.getElementById('root')
+    );
+====OR===
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+5. Create a Dockerfile
+
+This Dockerfile will build a Docker image for the frontend:
+
+Dockerfile
+
+# Dockerfile
+FROM node:14
+WORKDIR /app
+COPY . .
+RUN npm install
+EXPOSE 3000
+CMD ["npm", "start"]
+
+Step 4: Dockerize Both Applications
+
+Go to the covid19-app directory:
+
+bash
+
+cd ../..
+Create docker-compose.yaml
+
+    In the root folder of your project (covid19-app), create a file named docker-compose.yaml.
+
+    Add the following content to docker-compose.yaml:
+
+yaml
+
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+Explanation of the docker-compose.yaml
+
+    version: Specifies the version of Docker Compose.
+
+    services: This section defines the different services (containers) that make up your application.
+
+        backend: This service will build the Docker image from the Dockerfile in the backend directory. It maps port 5000 on your host machine to port 5000 in the container.
+
+        frontend: This service builds the Docker image from the Dockerfile in the frontend directory. It maps port 3000 on your host machine to port 3000 in the container.
+
+        depends_on: This option ensures that the backend service starts before the frontend service.
+
+Step 2: Build and Run the Application
+
+    Navigate to your project directory:
+
+    bash
+
+cd covid19-app
+
+Run Docker Compose to build and start the services:
+
+bash
+
+    docker-compose up --build
+
+    Access the application:
+        Open your browser and go to http://localhost:3000 to see the frontend, which will fetch data from the backend running on http://localhost:5000.
+
+Step 3: Stopping the Application
+
+To stop the services, you can use:
+
+bash
+
+docker-compose down
+=======
+
+To push your Docker images to Docker Hub, you need to follow these steps:
+Step 1: Create a Docker Hub Account
+
+If you don't have an account on Docker Hub, create one at Docker Hub.
+Step 2: Log In to Docker Hub
+
+You need to log in to your Docker Hub account from the command line. Run the following command:
+
+bash
+
+docker login
+
+You will be prompted to enter your Docker Hub username and password.
+Step 3: Tag Your Images
+
+Before you push your images, you should tag them with your Docker Hub username. This helps Docker identify the repository on Docker Hub where you want to push the image.
+
+Assuming your Docker Hub username is yourusername, run the following commands:
+
+bash
+
+docker tag covid-backend:latest yourusername/covid-backend:latest
+docker tag covid-frontend:latest yourusername/covid-frontend:latest
+
+Step 4: Push Your Images
+
+Now you can push your images to Docker Hub using the following commands:
+
+bash
+
+docker push yourusername/covid-backend:latest
+docker push yourusername/covid-frontend:latest
+
+Step 5: Verify on Docker Hub
+
+Once the push is complete, you can go to your Docker Hub account and check if the images appear in your repositories.
+Summary
+
+    Log in to Docker Hub using docker login.
+    Tag your images with your Docker Hub username.
+    Push the images to Docker Hub using docker push.
+    
+========
+Build Docker images
+
+    Backend:
+
+    bash
+
+docker build -t covid-backend ./backend
+
+Frontend:
+
+bash
+
+    docker build -t covid-frontend ./frontend
+
+Step 5: Kubernetes (k3s) Configuration Files
+Create Kubernetes YAML files for the frontend and backend services.
+
+In the k8s folder, create two files named backend-deployment.yaml and frontend-deployment.yaml.
+
+    k8s/backend-deployment.yaml:
+
+    yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: covid-backend
+        ports:
+        - containerPort: 5000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+spec:
+  selector:
+    app: backend
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+  type: NodePort
+
+k8s/frontend-deployment.yaml:
+
+yaml
+
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: frontend
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: frontend
+      template:
+        metadata:
+          labels:
+            app: frontend
+        spec:
+          containers:
+          - name: frontend
+            image: covid-frontend
+            ports:
+            - containerPort: 3000
+    ---
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: frontend-service
+    spec:
+      selector:
+        app: frontend
+      ports:
+        - protocol: TCP
+          port: 80
+          targetPort: 3000
+      type: NodePort
+
+Step 6: Deploy to k3s
+
+    Start k3s on your local machine if not already running:
+
+    bash
+
+sudo k3s server &
+
+Apply the Kubernetes configurations:
+
+bash
+
+kubectl apply -f k8s/backend-deployment.yaml
+kubectl apply -f k8s/frontend-deployment.yaml
+
+Verify that the services are running:
+
+bash
+
+    kubectl get pods
+    kubectl get services
+
+Step 7: Access the Application Locally
+
+Find the NodePort value for each service and use it to access the application in your browser:
+
+bash
+
+kubectl get services
+
+You’ll see a list with port numbers; use localhost:<NodePort> to access each service in your browser.
